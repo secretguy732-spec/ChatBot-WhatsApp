@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Create Bot — CombiChatBot-WattshApp</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="../firebase/firebase-config.js"></script>
+  <style>
+    .create-layout {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 28px;
+    }
+    .form-card  { padding: 36px; }
+    .preview-card { padding: 28px; position: sticky; top: 24px; align-self: start; }
+    .preview-bot {
+      text-align: center; margin-bottom: 24px;
+    }
+    .preview-avatar {
+      width: 80px; height: 80px;
+      background: linear-gradient(135deg, var(--neon-blue), var(--neon-cyan));
+      border-radius: 22px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 2.4rem;
+      box-shadow: 0 0 30px rgba(0,136,255,0.4);
+      margin-bottom: 12px;
+    }
+    .prompt-examples { display: flex; flex-direction: column; gap: 8px; }
+    .prompt-example {
+      padding: 10px 14px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-sm);
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .prompt-example:hover {
+      background: rgba(0,212,255,0.06);
+      border-color: var(--border-glow);
+      color: var(--text-primary);
+    }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 960px) {
+      .create-layout { grid-template-columns: 1fr; }
+      .form-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="orb orb-1"></div>
+
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-logo">🤖</div>
+        <div>
+          <div style="font-size:0.95rem">CombiChatBot</div>
+          <div style="font-size:0.7rem;color:var(--neon-cyan);font-weight:400">WattshApp</div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Main</div>
+        <a href="dashboard.html" class="nav-item">🏠 &nbsp;Dashboard</a>
+        <a href="create-bot.html" class="nav-item active">➕ &nbsp;Create Bot</a>
+        <div class="nav-section-label" style="margin-top:12px">Bot</div>
+        <a href="bot-control.html" class="nav-item">🎮 &nbsp;Bot Control</a>
+        <a href="chat-logs.html"   class="nav-item">💬 &nbsp;Chat Logs</a>
+        <div class="nav-section-label" style="margin-top:12px">Account</div>
+        <a href="settings.html" class="nav-item">⚙️ &nbsp;Settings</a>
+        <a href="#" class="nav-item" onclick="logout()">🚪 &nbsp;Sign Out</a>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h2 class="page-title">➕ Create New Bot</h2>
+        <p class="page-subtitle">Configure your WhatsApp AI chatbot in minutes.</p>
+      </div>
+
+      <div class="create-layout">
+        <!-- Form -->
+        <div class="card form-card">
+          <div id="error-msg" style="display:none;padding:12px 16px;background:rgba(255,59,92,0.1);border:1px solid rgba(255,59,92,0.3);border-radius:8px;color:var(--neon-red);font-size:0.88rem;margin-bottom:24px"></div>
+
+          <!-- Bot Identity -->
+          <h3 style="margin-bottom:20px;color:var(--neon-cyan);font-size:0.95rem;text-transform:uppercase;letter-spacing:0.06em">🤖 Bot Identity</h3>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Bot Name *</label>
+              <input type="text" id="botName" class="form-input"
+                placeholder="e.g. ShopBot Ayu"
+                oninput="updatePreview()"/>
+              <small style="color:var(--text-muted);font-size:0.78rem">Name your customers will interact with</small>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Business Name</label>
+              <input type="text" id="businessName" class="form-input"
+                placeholder="e.g. Toko Ayu Fashion"
+                oninput="updatePreview()"/>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">WhatsApp Phone Number</label>
+            <input type="tel" id="phoneNumber" class="form-input"
+              placeholder="e.g. +62 812 3456 7890"/>
+            <small style="color:var(--text-muted);font-size:0.78rem">The number whose WhatsApp you'll connect</small>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- AI Configuration -->
+          <h3 style="margin-bottom:20px;color:var(--neon-cyan);font-size:0.95rem;text-transform:uppercase;letter-spacing:0.06em">🧠 AI Configuration</h3>
+
+          <div class="form-group">
+            <label class="form-label">AI Prompt / Instructions *</label>
+            <textarea id="prompt" class="form-textarea" rows="5"
+              placeholder="Describe how your bot should behave..."
+              oninput="updatePreview()"></textarea>
+            <small style="color:var(--text-muted);font-size:0.78rem">This is the personality and instructions for your AI</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Auto Greeting Message</label>
+            <input type="text" id="greetingMessage" class="form-input"
+              placeholder="e.g. Halo! Ada yang bisa saya bantu? 😊"
+              oninput="updatePreview()"/>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Store Link -->
+          <h3 style="margin-bottom:20px;color:var(--neon-cyan);font-size:0.95rem;text-transform:uppercase;letter-spacing:0.06em">🛒 Store / Product Link</h3>
+
+          <div class="form-group">
+            <label class="form-label">Product / Store Link</label>
+            <input type="url" id="productLink" class="form-input"
+              placeholder="https://shopee.co.id/your-store"/>
+            <small style="color:var(--text-muted);font-size:0.78rem">AI will include this link when guiding customers to buy</small>
+          </div>
+
+          <button id="create-btn" class="btn btn-primary btn-lg"
+            style="width:100%;margin-top:8px" onclick="handleCreate()">
+            🚀 Create Bot &amp; Continue
+          </button>
+        </div>
+
+        <!-- Preview & Tips -->
+        <div>
+          <div class="card preview-card" style="margin-bottom:20px">
+            <div class="preview-bot">
+              <div class="preview-avatar">🤖</div>
+              <div id="preview-name" style="font-weight:700;font-size:1.1rem">Your Bot</div>
+              <div id="preview-biz"  style="color:var(--text-muted);font-size:0.85rem;margin-top:4px">Business Name</div>
+            </div>
+            <div class="divider"></div>
+            <div style="font-size:0.82rem;color:var(--text-secondary);line-height:1.7" id="preview-prompt">
+              <em>Fill in the form to see a preview</em>
+            </div>
+          </div>
+
+          <div class="card" style="padding:24px">
+            <h4 style="margin-bottom:16px;font-size:0.9rem">💡 Prompt Examples</h4>
+            <p style="font-size:0.8rem;margin-bottom:12px">Click to use as starting point:</p>
+            <div class="prompt-examples">
+              <div class="prompt-example" onclick="setPrompt(this)">
+                You are a friendly customer service bot for an online fashion store. Help customers find their size, check product availability, and guide them to purchase. Always be polite and end with the store link.
+              </div>
+              <div class="prompt-example" onclick="setPrompt(this)">
+                You are a food ordering assistant. Help customers browse our menu, explain ingredients, take orders, and confirm delivery information. Be enthusiastic and cheerful.
+              </div>
+              <div class="prompt-example" onclick="setPrompt(this)">
+                You are a professional business inquiry assistant. Answer questions about services, pricing, and availability. Collect customer contact info and schedule callbacks when needed.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    requireAuth();
+
+    function updatePreview() {
+      const name    = document.getElementById("botName").value || "Your Bot";
+      const biz     = document.getElementById("businessName").value || "Business Name";
+      const prompt  = document.getElementById("prompt").value || "Fill in the form to see a preview";
+      document.getElementById("preview-name").textContent = name;
+      document.getElementById("preview-biz").textContent  = biz;
+      document.getElementById("preview-prompt").textContent = prompt.substring(0, 200) + (prompt.length > 200 ? "…" : "");
+    }
+
+    function setPrompt(el) {
+      document.getElementById("prompt").value = el.textContent.trim();
+      updatePreview();
+    }
+
+    async function handleCreate() {
+      const btn    = document.getElementById("create-btn");
+      const errDiv = document.getElementById("error-msg");
+      errDiv.style.display = "none";
+
+      const body = {
+        botName:         document.getElementById("botName").value.trim(),
+        businessName:    document.getElementById("businessName").value.trim(),
+        phoneNumber:     document.getElementById("phoneNumber").value.trim(),
+        prompt:          document.getElementById("prompt").value.trim(),
+        productLink:     document.getElementById("productLink").value.trim(),
+        greetingMessage: document.getElementById("greetingMessage").value.trim(),
+      };
+
+      if (!body.botName) {
+        errDiv.textContent = "Bot Name is required.";
+        errDiv.style.display = "block"; return;
+      }
+      if (!body.prompt) {
+        errDiv.textContent = "AI Prompt / Instructions is required.";
+        errDiv.style.display = "block"; return;
+      }
+
+      setLoading(btn, true, "Creating bot...");
+
+      try {
+        const { botId } = await api.post("/bot/create", body);
+        showToast("Bot created! Launching control panel...", "success");
+        sessionStorage.setItem("activeBotId", botId);
+        setTimeout(() => window.location.href = "bot-control.html", 1500);
+      } catch (err) {
+        errDiv.textContent   = "Error: " + err.message;
+        errDiv.style.display = "block";
+        setLoading(btn, false);
+      }
+    }
+  </script>
+</body>
+</html>

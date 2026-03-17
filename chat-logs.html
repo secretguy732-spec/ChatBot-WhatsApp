@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Chat Logs — CombiChatBot-WattshApp</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="../firebase/firebase-config.js"></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    .logs-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 24px;
+      height: calc(100vh - 180px);
+    }
+    .customers-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-lg);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .customers-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-dim);
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--neon-cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .customers-list {
+      flex: 1;
+      overflow-y: auto;
+    }
+    .customer-item {
+      padding: 14px 20px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border-dim);
+      transition: var(--transition);
+    }
+    .customer-item:hover { background: rgba(0,212,255,0.05); }
+    .customer-item.active { background: rgba(0,136,255,0.12); border-left: 2px solid var(--neon-cyan); }
+    .customer-num  { font-size: 0.88rem; font-weight: 600; font-family: var(--font-mono); color: var(--text-primary); }
+    .customer-last { font-size: 0.78rem; color: var(--text-muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .chat-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-lg);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .chat-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border-dim);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .chat-header-avatar {
+      width: 38px; height: 38px;
+      background: linear-gradient(135deg, var(--neon-blue), var(--neon-cyan));
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem;
+    }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .msg-bubble {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-width: 75%;
+      animation: msg-slide-in 0.25s ease;
+    }
+    .msg-bubble.incoming { align-self: flex-start; }
+    .msg-bubble.outgoing { align-self: flex-end; }
+    .bubble-inner {
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+    .incoming .bubble-inner {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border-dim);
+      border-bottom-left-radius: 4px;
+      color: var(--text-primary);
+    }
+    .outgoing .bubble-inner {
+      background: linear-gradient(135deg, rgba(0,136,255,0.25), rgba(0,212,255,0.15));
+      border: 1px solid rgba(0,212,255,0.2);
+      border-bottom-right-radius: 4px;
+      color: var(--text-primary);
+    }
+    .bubble-meta {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .outgoing .bubble-meta { justify-content: flex-end; }
+    .ai-tag {
+      background: rgba(0,212,255,0.1);
+      color: var(--neon-cyan);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.68rem;
+      font-weight: 700;
+    }
+    .empty-chat {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      color: var(--text-muted);
+    }
+    .live-indicator {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 0.78rem; font-weight: 600;
+      color: var(--neon-green);
+    }
+    .live-dot {
+      width: 8px; height: 8px;
+      background: var(--neon-green);
+      border-radius: 50%;
+      animation: pulse-dot 1.5s infinite;
+    }
+    @media (max-width: 900px) {
+      .logs-layout { grid-template-columns: 1fr; height: auto; }
+      .customers-panel { height: 250px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="orb orb-1"></div>
+
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-logo">🤖</div>
+        <div>
+          <div style="font-size:0.95rem">CombiChatBot</div>
+          <div style="font-size:0.7rem;color:var(--neon-cyan);font-weight:400">WattshApp</div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Main</div>
+        <a href="dashboard.html" class="nav-item">🏠 &nbsp;Dashboard</a>
+        <a href="create-bot.html" class="nav-item">➕ &nbsp;Create Bot</a>
+        <div class="nav-section-label" style="margin-top:12px">Bot</div>
+        <a href="bot-control.html" class="nav-item">🎮 &nbsp;Bot Control</a>
+        <a href="chat-logs.html"   class="nav-item active">💬 &nbsp;Chat Logs</a>
+        <div class="nav-section-label" style="margin-top:12px">Account</div>
+        <a href="settings.html" class="nav-item">⚙️ &nbsp;Settings</a>
+        <a href="#" class="nav-item" onclick="logout()">🚪 &nbsp;Sign Out</a>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <div class="page-header" style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <h2 class="page-title">💬 Chat Logs</h2>
+          <p class="page-subtitle">Real-time conversation history with your customers.</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <select id="bot-select" class="form-input" style="width:auto;padding:8px 14px;font-size:0.85rem" onchange="switchBot(this.value)">
+            <option value="">Select bot...</option>
+          </select>
+          <div class="live-indicator">
+            <div class="live-dot"></div> LIVE
+          </div>
+        </div>
+      </div>
+
+      <div class="logs-layout">
+        <!-- Customers Panel -->
+        <div class="customers-panel">
+          <div class="customers-header">👥 Customers (<span id="customer-count">0</span>)</div>
+          <div class="customers-list" id="customers-list">
+            <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem">
+              Select a bot to see conversations
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat View -->
+        <div class="chat-panel">
+          <div class="chat-header" id="chat-header">
+            <div style="color:var(--text-muted);font-size:0.9rem">Select a customer to view conversation</div>
+          </div>
+          <div class="chat-messages" id="chat-messages">
+            <div class="empty-chat">
+              <div style="font-size:3rem;opacity:0.3">💬</div>
+              <p style="font-size:0.9rem">No conversation selected</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    let currentBotId     = null;
+    let selectedSender   = null;
+    let allMessages      = [];
+    let socket           = null;
+    // Map: sender → [messages]
+    const customerMap    = {};
+
+    async function init() {
+      await requireAuth();
+      await loadBots();
+      const stored = sessionStorage.getItem("activeBotId");
+      if (stored) {
+        document.getElementById("bot-select").value = stored;
+        switchBot(stored);
+      }
+    }
+
+    async function loadBots() {
+      const { bots } = await api.get("/bot/list");
+      const sel = document.getElementById("bot-select");
+      bots.forEach(b => {
+        const o = document.createElement("option");
+        o.value = b.botId; o.textContent = b.botName;
+        sel.appendChild(o);
+      });
+    }
+
+    async function switchBot(botId) {
+      if (!botId) return;
+      currentBotId   = botId;
+      selectedSender = null;
+      Object.keys(customerMap).forEach(k => delete customerMap[k]);
+
+      // Load messages
+      try {
+        const { messages } = await api.get(`/bot/${botId}/messages?limit=200`);
+        allMessages = messages;
+        buildCustomerMap(messages);
+        renderCustomers();
+      } catch (err) {
+        showToast("Failed to load messages: " + err.message, "error");
+      }
+
+      // WebSocket subscription
+      if (socket) socket.emit("unsubscribe_bot", currentBotId);
+      socket = subscribeToBot(botId);
+      socket.on("bot:message", onNewMessage);
+    }
+
+    function buildCustomerMap(messages) {
+      messages.forEach(msg => {
+        if (!customerMap[msg.sender]) customerMap[msg.sender] = [];
+        customerMap[msg.sender].push(msg);
+      });
+    }
+
+    function onNewMessage(data) {
+      if (data.botId !== currentBotId) return;
+      if (!customerMap[data.sender]) customerMap[data.sender] = [];
+      customerMap[data.sender].push(data);
+      renderCustomers();
+      if (selectedSender === data.sender) renderChat(data.sender);
+    }
+
+    function renderCustomers() {
+      const list    = document.getElementById("customers-list");
+      const senders = Object.keys(customerMap);
+      document.getElementById("customer-count").textContent = senders.length;
+
+      if (!senders.length) {
+        list.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem">No conversations yet</div>`;
+        return;
+      }
+
+      list.innerHTML = senders.map(sender => {
+        const msgs    = customerMap[sender];
+        const last    = msgs[msgs.length - 1];
+        const preview = last.message.length > 35 ? last.message.substring(0,35)+"…" : last.message;
+        const active  = sender === selectedSender ? "active" : "";
+        return `
+          <div class="customer-item ${active}" onclick="selectCustomer('${sender}')">
+            <div class="customer-num">${formatPhone(sender)}</div>
+            <div class="customer-last">${escHtml(preview)}</div>
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">${formatTime(last.timestamp)} · ${msgs.length} msgs</div>
+          </div>`;
+      }).join("");
+    }
+
+    function selectCustomer(sender) {
+      selectedSender = sender;
+      renderCustomers(); // re-render to update active
+      renderChat(sender);
+    }
+
+    function renderChat(sender) {
+      const msgs   = customerMap[sender] || [];
+      const header = document.getElementById("chat-header");
+      const view   = document.getElementById("chat-messages");
+
+      header.innerHTML = `
+        <div class="chat-header-avatar">👤</div>
+        <div>
+          <div style="font-weight:700;font-size:0.95rem">${formatPhone(sender)}</div>
+          <div style="font-size:0.75rem;color:var(--text-muted)">${msgs.length} messages</div>
+        </div>`;
+
+      if (!msgs.length) {
+        view.innerHTML = `<div class="empty-chat"><p>No messages</p></div>`;
+        return;
+      }
+
+      view.innerHTML = msgs.map(msg => `
+        <div class="msg-bubble ${msg.type}">
+          <div class="bubble-inner">${escHtml(msg.message)}</div>
+          <div class="bubble-meta">
+            ${msg.type === "outgoing" ? '<span class="ai-tag">🤖 AI</span>' : "👤 Customer"}
+            <span>${formatTime(msg.timestamp)}</span>
+          </div>
+        </div>`).join("");
+
+      view.scrollTop = view.scrollHeight;
+    }
+
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+        .replace(/\n/g,"<br>");
+    }
+
+    init();
+  </script>
+</body>
+</html>

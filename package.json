@@ -1,0 +1,24 @@
+{
+  "name": "combichatbot-backend",
+  "version": "1.0.0",
+  "description": "CombiChatBot-WattshApp Backend – WhatsApp AI Chatbot SaaS",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "openai": "^4.24.1",
+    "firebase-admin": "^11.11.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "qrcode": "^1.5.3",
+    "pino": "^8.17.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}

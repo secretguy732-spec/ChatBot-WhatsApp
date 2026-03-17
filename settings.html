@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Settings — CombiChatBot-WattshApp</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="../firebase/firebase-config.js"></script>
+  <style>
+    .settings-grid { display: grid; grid-template-columns: 240px 1fr; gap: 28px; }
+    .settings-nav { display: flex; flex-direction: column; gap: 4px; }
+    .settings-nav-item {
+      padding: 10px 16px; border-radius: var(--radius-sm);
+      font-size: 0.88rem; font-weight: 500; cursor: pointer;
+      color: var(--text-secondary); transition: var(--transition);
+    }
+    .settings-nav-item:hover { background: rgba(0,212,255,0.06); color: var(--text-primary); }
+    .settings-nav-item.active { background: rgba(0,136,255,0.15); color: var(--neon-cyan); }
+
+    .settings-section { display: none; }
+    .settings-section.visible { display: block; }
+    .section-card { padding: 32px; margin-bottom: 20px; }
+    .section-card h3 { margin-bottom: 24px; font-size: 1rem; padding-bottom: 12px; border-bottom: 1px solid var(--border-dim); }
+
+    .danger-zone {
+      border-color: rgba(255,59,92,0.3) !important;
+    }
+    .danger-zone h3 { color: var(--neon-red); }
+
+    .info-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 0; border-bottom: 1px solid var(--border-dim);
+      font-size: 0.9rem;
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-label { color: var(--text-secondary); font-size: 0.85rem; }
+    .info-value { font-weight: 600; }
+
+    .plan-badge {
+      padding: 4px 12px; border-radius: 20px; font-size: 0.78rem; font-weight: 700;
+      background: rgba(0,212,255,0.1); color: var(--neon-cyan);
+      border: 1px solid rgba(0,212,255,0.25); text-transform: uppercase;
+    }
+    @media (max-width: 800px) {
+      .settings-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="orb orb-1"></div>
+
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-logo">🤖</div>
+        <div>
+          <div style="font-size:0.95rem">CombiChatBot</div>
+          <div style="font-size:0.7rem;color:var(--neon-cyan);font-weight:400">WattshApp</div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Main</div>
+        <a href="dashboard.html" class="nav-item">🏠 &nbsp;Dashboard</a>
+        <a href="create-bot.html" class="nav-item">➕ &nbsp;Create Bot</a>
+        <div class="nav-section-label" style="margin-top:12px">Bot</div>
+        <a href="bot-control.html" class="nav-item">🎮 &nbsp;Bot Control</a>
+        <a href="chat-logs.html"   class="nav-item">💬 &nbsp;Chat Logs</a>
+        <div class="nav-section-label" style="margin-top:12px">Account</div>
+        <a href="settings.html" class="nav-item active">⚙️ &nbsp;Settings</a>
+        <a href="#" class="nav-item" onclick="logout()">🚪 &nbsp;Sign Out</a>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h2 class="page-title">⚙️ Settings</h2>
+        <p class="page-subtitle">Manage your account and preferences.</p>
+      </div>
+
+      <div class="settings-grid">
+        <!-- Settings Nav -->
+        <div>
+          <div class="settings-nav">
+            <div class="settings-nav-item active" onclick="showSection('account')">👤 Account</div>
+            <div class="settings-nav-item" onclick="showSection('security')">🔒 Security</div>
+            <div class="settings-nav-item" onclick="showSection('api')">🔑 API Keys</div>
+            <div class="settings-nav-item" onclick="showSection('danger')">⚠️ Danger Zone</div>
+          </div>
+        </div>
+
+        <!-- Sections -->
+        <div>
+          <!-- Account -->
+          <div id="section-account" class="settings-section visible">
+            <div class="card section-card">
+              <h3>👤 Account Information</h3>
+              <div class="info-row">
+                <span class="info-label">Email Address</span>
+                <span class="info-value" id="info-email">—</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">User ID</span>
+                <span class="info-value" id="info-uid" style="font-family:var(--font-mono);font-size:0.8rem;color:var(--text-muted)">—</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Member Since</span>
+                <span class="info-value" id="info-joined">—</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Plan</span>
+                <span class="plan-badge" id="info-plan">Free</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Security -->
+          <div id="section-security" class="settings-section">
+            <div class="card section-card">
+              <h3>🔒 Change Password</h3>
+              <div class="form-group">
+                <label class="form-label">New Password</label>
+                <input type="password" id="new-pass" class="form-input" placeholder="Min. 8 characters"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Confirm New Password</label>
+                <input type="password" id="confirm-pass" class="form-input" placeholder="Re-enter password"/>
+              </div>
+              <button class="btn btn-primary" onclick="changePassword()">Update Password</button>
+            </div>
+          </div>
+
+          <!-- API Keys -->
+          <div id="section-api" class="settings-section">
+            <div class="card section-card">
+              <h3>🔑 API Configuration</h3>
+              <p style="margin-bottom:20px;font-size:0.88rem;line-height:1.7">
+                API keys are configured in the backend <code style="background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px;font-family:var(--font-mono)">.env</code> file on your server. This is the recommended secure approach — keys are never exposed to the browser.
+              </p>
+              <div class="info-row">
+                <span class="info-label">OpenAI API Key</span>
+                <span class="info-value" style="color:var(--neon-green)">✅ Configured on server</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Firebase Config</span>
+                <span class="info-value" style="color:var(--neon-green)">✅ Connected</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Backend API</span>
+                <span id="api-status" class="info-value" style="color:var(--neon-amber)">Checking...</span>
+              </div>
+              <button class="btn btn-secondary btn-sm" style="margin-top:16px" onclick="checkBackend()">🔄 Test Connection</button>
+            </div>
+
+            <div class="card section-card">
+              <h3>🔗 Backend URL</h3>
+              <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:16px">
+                If you deploy the backend to a different URL, update <code style="background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px;font-family:var(--font-mono)">API_BASE</code> in <code style="background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px;font-family:var(--font-mono)">app.js</code>.
+              </p>
+              <div class="form-input" style="font-family:var(--font-mono);font-size:0.82rem;color:var(--neon-cyan);cursor:default">
+                http://localhost:3001/api
+              </div>
+            </div>
+          </div>
+
+          <!-- Danger Zone -->
+          <div id="section-danger" class="settings-section">
+            <div class="card section-card danger-zone">
+              <h3>⚠️ Danger Zone</h3>
+              <p style="margin-bottom:20px;font-size:0.88rem;color:var(--text-secondary)">
+                These actions are irreversible. Please proceed with caution.
+              </p>
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border:1px solid rgba(255,59,92,0.2);border-radius:var(--radius-sm)">
+                  <div>
+                    <div style="font-weight:600;margin-bottom:4px">Delete All Bots</div>
+                    <div style="font-size:0.82rem;color:var(--text-muted)">Stop and permanently delete all your bots</div>
+                  </div>
+                  <button class="btn btn-danger btn-sm" onclick="confirmDeleteAllBots()">Delete All</button>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border:1px solid rgba(255,59,92,0.2);border-radius:var(--radius-sm)">
+                  <div>
+                    <div style="font-weight:600;margin-bottom:4px">Sign Out All Devices</div>
+                    <div style="font-size:0.82rem;color:var(--text-muted)">Invalidate all active sessions</div>
+                  </div>
+                  <button class="btn btn-danger btn-sm" onclick="logout()">Sign Out</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    async function init() {
+      const user = await requireAuth();
+      document.getElementById("info-email").textContent = user.email;
+      document.getElementById("info-uid").textContent   = user.uid;
+
+      try {
+        const profile = await api.get("/auth/profile");
+        document.getElementById("info-joined").textContent = formatDate(profile.createdAt);
+        document.getElementById("info-plan").textContent   = (profile.plan || "free").toUpperCase();
+      } catch (_) {}
+
+      checkBackend();
+    }
+
+    function showSection(name) {
+      document.querySelectorAll(".settings-section").forEach(el => el.classList.remove("visible"));
+      document.querySelectorAll(".settings-nav-item").forEach(el => el.classList.remove("active"));
+      document.getElementById(`section-${name}`).classList.add("visible");
+      event.target.classList.add("active");
+    }
+
+    async function changePassword() {
+      const np = document.getElementById("new-pass").value;
+      const cp = document.getElementById("confirm-pass").value;
+      if (!np || !cp)      { showToast("Fill in both fields", "error"); return; }
+      if (np !== cp)       { showToast("Passwords do not match", "error"); return; }
+      if (np.length < 8)   { showToast("Min 8 characters", "error"); return; }
+      try {
+        await _auth.currentUser.updatePassword(np);
+        showToast("Password updated!", "success");
+        document.getElementById("new-pass").value = "";
+        document.getElementById("confirm-pass").value = "";
+      } catch (err) {
+        showToast("Error: " + err.message, "error");
+      }
+    }
+
+    async function checkBackend() {
+      const el = document.getElementById("api-status");
+      el.textContent = "Checking...";
+      el.style.color = "var(--neon-amber)";
+      try {
+        const res = await fetch("http://localhost:3001/api/health");
+        if (res.ok) {
+          el.textContent = "✅ Connected";
+          el.style.color = "var(--neon-green)";
+        } else throw new Error();
+      } catch {
+        el.textContent = "❌ Offline — start backend server";
+        el.style.color = "var(--neon-red)";
+      }
+    }
+
+    async function confirmDeleteAllBots() {
+      if (!confirm("Are you SURE you want to delete ALL bots? This cannot be undone!")) return;
+      try {
+        const { bots } = await api.get("/bot/list");
+        for (const b of bots) await api.delete(`/bot/${b.botId}`);
+        showToast("All bots deleted", "success");
+      } catch (err) {
+        showToast("Error: " + err.message, "error");
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

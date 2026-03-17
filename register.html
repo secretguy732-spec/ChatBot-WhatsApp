@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Register — CombiChatBot-WattshApp</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="../firebase/firebase-config.js"></script>
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 40px 24px; }
+    .auth-container { width: 100%; max-width: 440px; position: relative; z-index: 1; }
+    .auth-logo { text-align: center; margin-bottom: 32px; }
+    .auth-logo .logo-big {
+      width: 64px; height: 64px;
+      background: linear-gradient(135deg, var(--neon-blue), var(--neon-cyan));
+      border-radius: 18px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 2rem;
+      box-shadow: 0 0 40px rgba(0,136,255,0.4);
+      margin-bottom: 16px;
+    }
+    .auth-card { padding: 36px; }
+    .auth-footer { text-align: center; margin-top: 20px; font-size: 0.88rem; color: var(--text-secondary); }
+    .terms-note { font-size: 0.78rem; color: var(--text-muted); text-align: center; margin-top: 16px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+
+  <div class="auth-container">
+    <div class="auth-logo">
+      <div class="logo-big">🤖</div>
+      <h1>Create your account</h1>
+      <p>Start automating WhatsApp in minutes</p>
+    </div>
+
+    <div class="card auth-card">
+      <div id="error-msg" style="display:none;padding:12px 16px;background:rgba(255,59,92,0.1);border:1px solid rgba(255,59,92,0.3);border-radius:8px;color:var(--neon-red);font-size:0.88rem;margin-bottom:20px"></div>
+      <div id="success-msg" style="display:none;padding:12px 16px;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.3);border-radius:8px;color:var(--neon-green);font-size:0.88rem;margin-bottom:20px"></div>
+
+      <div class="form-group">
+        <label class="form-label">Email Address</label>
+        <input type="email" id="email" class="form-input" placeholder="you@business.com"/>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" id="password" class="form-input" placeholder="At least 8 characters"/>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Confirm Password</label>
+        <input type="password" id="confirm-password" class="form-input" placeholder="Re-enter password"/>
+      </div>
+
+      <button id="register-btn" class="btn btn-primary" style="width:100%;margin-top:8px" onclick="handleRegister()">
+        Create Account
+      </button>
+
+      <p class="terms-note">
+        By creating an account, you agree to our
+        <a href="#" style="color:var(--neon-cyan)">Terms of Service</a> and
+        <a href="#" style="color:var(--neon-cyan)">Privacy Policy</a>.
+      </p>
+    </div>
+
+    <div class="auth-footer">
+      Already have an account? <a href="login.html">Sign In</a>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    window.addEventListener("auth:change", ({ detail: { user } }) => {
+      if (user) window.location.href = "dashboard.html";
+    });
+
+    async function handleRegister() {
+      const email    = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      const confirm  = document.getElementById("confirm-password").value;
+      const btn      = document.getElementById("register-btn");
+      const errDiv   = document.getElementById("error-msg");
+      const sucDiv   = document.getElementById("success-msg");
+
+      errDiv.style.display = "none";
+      sucDiv.style.display = "none";
+
+      if (!email || !password || !confirm) {
+        errDiv.textContent = "Please fill in all fields.";
+        errDiv.style.display = "block"; return;
+      }
+      if (password !== confirm) {
+        errDiv.textContent = "Passwords do not match.";
+        errDiv.style.display = "block"; return;
+      }
+      if (password.length < 8) {
+        errDiv.textContent = "Password must be at least 8 characters.";
+        errDiv.style.display = "block"; return;
+      }
+
+      setLoading(btn, true, "Creating account...");
+
+      try {
+        const cred = await register(email, password);
+        // Create user profile doc
+        await _db.collection("users").doc(cred.user.uid).set({
+          uid:       cred.user.uid,
+          email,
+          createdAt: new Date().toISOString(),
+          plan:      "free",
+        });
+        sucDiv.textContent = "Account created! Redirecting...";
+        sucDiv.style.display = "block";
+        // auth:change handles redirect
+      } catch (err) {
+        const msgs = {
+          "auth/email-already-in-use": "This email is already registered.",
+          "auth/invalid-email":        "Invalid email address.",
+          "auth/weak-password":        "Password is too weak.",
+        };
+        errDiv.textContent   = msgs[err.code] || err.message;
+        errDiv.style.display = "block";
+        setLoading(btn, false);
+      }
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") handleRegister();
+    });
+  </script>
+</body>
+</html>

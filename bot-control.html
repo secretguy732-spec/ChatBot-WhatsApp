@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Bot Control — CombiChatBot-WattshApp</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="../firebase/firebase-config.js"></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    .control-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    .bot-selector {
+      display: flex; align-items: center; gap: 12px;
+      padding: 16px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-sm);
+      margin-bottom: 28px;
+    }
+    .bot-select-dropdown {
+      flex: 1;
+      background: transparent;
+      color: var(--text-primary);
+      font-family: var(--font-main);
+      font-size: 0.95rem;
+      font-weight: 600;
+      border: none;
+      outline: none;
+      cursor: pointer;
+    }
+    .bot-select-dropdown option { background: var(--bg-elevated); }
+
+    .status-panel { padding: 32px; text-align: center; }
+    .status-icon { font-size: 3rem; margin-bottom: 16px; display: block; }
+    .status-label { font-size: 1.3rem; font-weight: 700; margin-bottom: 8px; }
+    .status-desc  { font-size: 0.88rem; color: var(--text-muted); }
+
+    .control-btns {
+      display: flex; gap: 12px; justify-content: center; margin-top: 24px; flex-wrap: wrap;
+    }
+
+    .qr-section { padding: 28px; }
+
+    .activity-log {
+      max-height: 280px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 8px;
+      padding: 16px;
+    }
+
+    .log-entry {
+      display: flex; align-items: flex-start; gap: 10px;
+      font-size: 0.82rem; color: var(--text-secondary);
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.02);
+      border-radius: 6px;
+      animation: msg-slide-in 0.3s ease;
+    }
+    .log-time { color: var(--text-muted); font-family: var(--font-mono); flex-shrink: 0; }
+    .log-type-in  { color: var(--neon-blue); }
+    .log-type-out { color: var(--neon-cyan); }
+
+    .settings-form { padding: 28px; }
+
+    @media (max-width: 900px) {
+      .control-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="orb orb-1"></div>
+
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-logo">🤖</div>
+        <div>
+          <div style="font-size:0.95rem">CombiChatBot</div>
+          <div style="font-size:0.7rem;color:var(--neon-cyan);font-weight:400">WattshApp</div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Main</div>
+        <a href="dashboard.html" class="nav-item">🏠 &nbsp;Dashboard</a>
+        <a href="create-bot.html" class="nav-item">➕ &nbsp;Create Bot</a>
+        <div class="nav-section-label" style="margin-top:12px">Bot</div>
+        <a href="bot-control.html" class="nav-item active">🎮 &nbsp;Bot Control</a>
+        <a href="chat-logs.html"   class="nav-item">💬 &nbsp;Chat Logs</a>
+        <div class="nav-section-label" style="margin-top:12px">Account</div>
+        <a href="settings.html" class="nav-item">⚙️ &nbsp;Settings</a>
+        <a href="#" class="nav-item" onclick="logout()">🚪 &nbsp;Sign Out</a>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h2 class="page-title">🎮 Bot Control</h2>
+        <p class="page-subtitle">Manage your WhatsApp bot connection and settings.</p>
+      </div>
+
+      <!-- Bot Selector -->
+      <div class="bot-selector">
+        <span style="font-size:1.2rem">🤖</span>
+        <label style="font-size:0.82rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap">Active Bot:</label>
+        <select id="bot-select" class="bot-select-dropdown" onchange="selectBot(this.value)">
+          <option value="">— Select a bot —</option>
+        </select>
+        <span id="bot-status-badge"></span>
+      </div>
+
+      <div id="no-bot-msg" style="display:none;text-align:center;padding:60px 20px;color:var(--text-secondary)">
+        <div style="font-size:3rem;margin-bottom:16px;opacity:0.4">🤖</div>
+        <p>No bots found. <a href="create-bot.html">Create your first bot</a> to get started.</p>
+      </div>
+
+      <div id="control-ui" style="display:none">
+        <div class="control-grid">
+          <!-- Status & Control -->
+          <div class="card">
+            <div class="status-panel">
+              <span id="status-icon" class="status-icon">⭕</span>
+              <div id="status-label" class="status-label">Offline</div>
+              <div id="status-desc"  class="status-desc">Bot is not running</div>
+
+              <div class="control-btns">
+                <button id="btn-start"   class="btn btn-success" onclick="botAction('start')">▶ Start Bot</button>
+                <button id="btn-stop"    class="btn btn-danger"  onclick="botAction('stop')">⏹ Stop Bot</button>
+                <button id="btn-restart" class="btn btn-secondary" onclick="botAction('restart')">🔄 Restart</button>
+              </div>
+
+              <div class="divider"></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <div style="text-align:center">
+                  <div style="font-size:1.4rem;font-weight:700;color:var(--neon-cyan)" id="total-msgs">0</div>
+                  <div style="font-size:0.75rem;color:var(--text-muted)">Total Messages</div>
+                </div>
+                <div style="text-align:center">
+                  <div style="font-size:1.4rem;font-weight:700;color:var(--neon-green)" id="today-msgs">0</div>
+                  <div style="font-size:0.75rem;color:var(--text-muted)">Today</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- QR Code -->
+          <div class="card">
+            <div class="qr-section">
+              <h3 style="margin-bottom:20px">📱 WhatsApp QR Code</h3>
+              <div id="qr-area">
+                <div style="text-align:center;padding:24px;color:var(--text-muted)">
+                  <div style="font-size:2rem;margin-bottom:8px">📱</div>
+                  <p style="font-size:0.88rem">Click <strong>Start Bot</strong> to generate QR code.<br>Then scan with WhatsApp on your phone.</p>
+                </div>
+              </div>
+              <div id="qr-instructions" style="display:none;margin-top:16px;padding:16px;background:rgba(0,212,255,0.06);border-radius:8px;font-size:0.82rem;color:var(--text-secondary);line-height:1.7">
+                <strong style="color:var(--neon-cyan)">How to scan:</strong><br>
+                1. Open WhatsApp on your phone<br>
+                2. Tap ⋮ → Linked Devices → Link a Device<br>
+                3. Scan the QR code above<br>
+                4. Wait for connection confirmation ✅
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Activity Log -->
+          <div class="card">
+            <div style="padding:20px 24px;border-bottom:1px solid var(--border-dim);display:flex;align-items:center;justify-content:space-between">
+              <h3>⚡ Live Activity</h3>
+              <button class="btn btn-secondary btn-sm" onclick="clearLog()">Clear</button>
+            </div>
+            <div id="activity-log" class="activity-log">
+              <div style="text-align:center;padding:20px;color:var(--text-muted);font-size:0.85rem">
+                Activity will appear here when bot is running...
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Settings -->
+          <div class="card">
+            <div style="padding:20px 24px;border-bottom:1px solid var(--border-dim)">
+              <h3>⚙️ Bot Settings</h3>
+            </div>
+            <div class="settings-form">
+              <div class="form-group">
+                <label class="form-label">AI Prompt</label>
+                <textarea id="edit-prompt" class="form-textarea" rows="4"></textarea>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Product / Store Link</label>
+                <input type="url" id="edit-product-link" class="form-input" placeholder="https://..."/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Greeting Message</label>
+                <input type="text" id="edit-greeting" class="form-input"/>
+              </div>
+              <button class="btn btn-primary" style="width:100%" onclick="saveSettings()">
+                💾 Save Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    let currentBotId = null;
+    let socket       = null;
+    let currentBot   = null;
+
+    async function init() {
+      await requireAuth();
+      await loadBotList();
+
+      // Check if a bot was pre-selected
+      const stored = sessionStorage.getItem("activeBotId");
+      if (stored) selectBot(stored);
+    }
+
+    async function loadBotList() {
+      try {
+        const { bots } = await api.get("/bot/list");
+        const sel = document.getElementById("bot-select");
+        sel.innerHTML = '<option value="">— Select a bot —</option>';
+
+        if (!bots.length) {
+          document.getElementById("no-bot-msg").style.display = "block";
+          return;
+        }
+
+        bots.forEach(b => {
+          const opt = document.createElement("option");
+          opt.value       = b.botId;
+          opt.textContent = `${b.botName} (${b.status})`;
+          sel.appendChild(opt);
+        });
+
+        // Auto-select first
+        if (bots.length === 1) selectBot(bots[0].botId);
+      } catch (err) {
+        showToast("Failed to load bots", "error");
+      }
+    }
+
+    async function selectBot(botId) {
+      if (!botId) return;
+      currentBotId = botId;
+      sessionStorage.setItem("activeBotId", botId);
+
+      document.getElementById("bot-select").value = botId;
+      document.getElementById("control-ui").style.display  = "block";
+      document.getElementById("no-bot-msg").style.display  = "none";
+
+      // Load bot data
+      try {
+        const { bot } = await api.get(`/bot/${botId}`);
+        currentBot = bot;
+        updateStatusUI(bot.status);
+        document.getElementById("total-msgs").textContent    = bot.messagesCount || 0;
+        document.getElementById("edit-prompt").value         = bot.prompt || "";
+        document.getElementById("edit-product-link").value   = bot.productLink || "";
+        document.getElementById("edit-greeting").value       = bot.greetingMessage || "";
+
+        // Load today stats
+        const stats = await api.get(`/bot/${botId}/stats`);
+        document.getElementById("today-msgs").textContent = stats.todayMessages || 0;
+      } catch (err) {
+        showToast("Failed to load bot: " + err.message, "error");
+      }
+
+      // Subscribe via WebSocket
+      if (socket) {
+        socket.emit("unsubscribe_bot", currentBotId);
+      }
+      socket = subscribeToBot(botId);
+      setupSocketListeners();
+    }
+
+    function setupSocketListeners() {
+      socket.off("bot:status");
+      socket.off("bot:qr");
+      socket.off("bot:qr_clear");
+      socket.off("bot:message");
+
+      socket.on("bot:status", ({ status }) => {
+        updateStatusUI(status);
+        // Update selector label
+        const sel = document.getElementById("bot-select");
+        const opt = sel.querySelector(`option[value="${currentBotId}"]`);
+        if (opt) opt.textContent = `${currentBot?.botName} (${status})`;
+      });
+
+      socket.on("bot:qr", ({ qr }) => {
+        document.getElementById("qr-area").innerHTML =
+          `<div class="qr-wrapper"><div class="qr-box"><img src="${qr}" width="280" height="280" alt="WhatsApp QR"/></div>
+           <p style="font-size:0.88rem;color:var(--text-secondary)">Scan with WhatsApp to connect</p></div>`;
+        document.getElementById("qr-instructions").style.display = "block";
+        addLog("info", "QR code generated — scan with WhatsApp");
+      });
+
+      socket.on("bot:qr_clear", () => {
+        document.getElementById("qr-area").innerHTML =
+          `<div style="text-align:center;padding:24px">
+            <div style="font-size:3rem">✅</div>
+            <p style="color:var(--neon-green);font-weight:700;margin-top:8px">Connected!</p>
+            <p style="font-size:0.85rem;color:var(--text-muted)">WhatsApp is linked successfully</p>
+          </div>`;
+        document.getElementById("qr-instructions").style.display = "none";
+      });
+
+      socket.on("bot:message", ({ sender, message, type }) => {
+        const short = message.length > 60 ? message.substring(0, 60) + "…" : message;
+        addLog(type, `${formatPhone(sender)}: ${short}`);
+        // Bump today counter
+        const el = document.getElementById("today-msgs");
+        el.textContent = (parseInt(el.textContent) || 0) + 1;
+      });
+    }
+
+    function updateStatusUI(status) {
+      const icons  = { online: "🟢", offline: "⭕", connecting: "🟡" };
+      const labels = { online: "Online",     offline: "Offline",    connecting: "Connecting..." };
+      const descs  = { online: "Bot is active and responding to messages",
+                       offline: "Bot is stopped",
+                       connecting: "Generating QR — please scan with WhatsApp" };
+
+      document.getElementById("status-icon").textContent  = icons[status]  || "⭕";
+      document.getElementById("status-label").textContent = labels[status] || "Unknown";
+      document.getElementById("status-desc").textContent  = descs[status]  || "";
+      document.getElementById("bot-status-badge").innerHTML = statusBadge(status);
+
+      // Button states
+      const btnStart   = document.getElementById("btn-start");
+      const btnStop    = document.getElementById("btn-stop");
+      const btnRestart = document.getElementById("btn-restart");
+      btnStart.disabled   = status === "online" || status === "connecting";
+      btnStop.disabled    = status === "offline";
+      btnRestart.disabled = status === "offline";
+    }
+
+    async function botAction(action) {
+      if (!currentBotId) { showToast("Select a bot first", "error"); return; }
+      const btns = ["btn-start","btn-stop","btn-restart"].map(id => document.getElementById(id));
+      btns.forEach(b => b.disabled = true);
+
+      try {
+        const res = await api.post(`/bot/${currentBotId}/${action}`, {});
+        showToast(res.message || "Done", "success");
+        addLog("system", `Bot action: ${action}`);
+      } catch (err) {
+        showToast("Error: " + err.message, "error");
+      } finally {
+        btns.forEach(b => b.disabled = false);
+      }
+    }
+
+    async function saveSettings() {
+      if (!currentBotId) return;
+      try {
+        await api.put(`/bot/${currentBotId}`, {
+          prompt:          document.getElementById("edit-prompt").value,
+          productLink:     document.getElementById("edit-product-link").value,
+          greetingMessage: document.getElementById("edit-greeting").value,
+        });
+        showToast("Settings saved!", "success");
+      } catch (err) {
+        showToast("Save failed: " + err.message, "error");
+      }
+    }
+
+    function addLog(type, text) {
+      const log  = document.getElementById("activity-log");
+      const time = new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+      const icon = type === "incoming" ? "📨" : type === "outgoing" ? "📤" : "⚡";
+      const cls  = type === "incoming" ? "log-type-in" : type === "outgoing" ? "log-type-out" : "";
+
+      // Remove empty state msg
+      if (log.querySelector("div[style]")) log.innerHTML = "";
+
+      const entry = document.createElement("div");
+      entry.className = "log-entry";
+      entry.innerHTML = `
+        <span class="log-time">${time}</span>
+        <span>${icon}</span>
+        <span class="${cls}">${text}</span>`;
+      log.appendChild(entry);
+      log.scrollTop = log.scrollHeight;
+
+      // Keep max 100 entries
+      while (log.children.length > 100) log.firstChild.remove();
+    }
+
+    function clearLog() {
+      document.getElementById("activity-log").innerHTML =
+        `<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:0.85rem">Log cleared</div>`;
+    }
+
+    init();
+  </script>
+</body>
+</html>
